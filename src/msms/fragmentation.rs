@@ -87,6 +87,7 @@ pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries,
     let seq_len = pep_seq.len();
     let mut frag_series_mz_values = Vec::with_capacity(seq_len);
     let t = &*STANDARD_AMINO_ACID_TABLE;
+
     // --- This function contains ion series directions itself --- //
     use FragmentIonSeriesDirection::*;
     match get_ion_series_direction(ion_type) {
@@ -158,6 +159,6 @@ pub fn compute_fragmentation_table(pep_seq: &str, ion_types: &[FragmentIonSeries
             });
         }
     }
-
+    //FragmentationTable
     Ok(frag_table)
 }

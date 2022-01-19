@@ -14,17 +14,18 @@ use crate::msms::fragmentation::FragmentationTable;
 
 type CustomExpPeak = GeomWithData<[f64; 2], f64>;
 type CustomTheoIon = GeomWithData<Rectangle<[f64; 2]>, (usize,usize)>;
+
 // --- Creation of "struct" that contains the required info about the exp. and theo. data for their --- //
 // comparison and specifications of each candidates. --- //
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MatchedPeak {
-    peak_mz: f64,
-    peak_intensity: f64,
-    theo_mz: f64,
-    mz_error: f32,
-    ion_type: FragmentIonSeries,
-    charge: i8,
-    aa_index: i32,
+    pub peak_mz: f64,
+    pub peak_intensity: f64,
+    pub theo_mz: f64,
+    pub mz_error: f32,
+    pub ion_type: FragmentIonSeries,
+    pub charge: i8,
+    pub aa_index: i32,
 }
 
 pub enum PeakSelectionStrategy {
@@ -32,7 +33,7 @@ pub enum PeakSelectionStrategy {
     HIGHEST_PEAK,
 }
 
-pub fn annotate_spectrum(spectrum_peaks: Vec<[f64;2]>, frag_table: FragmentationTable, mz_error_tol: f64, peak_sel_strategy: PeakSelectionStrategy) -> Vec<MatchedPeak> {
+pub fn annotate_spectrum(spectrum_peaks: &Vec<[f64;2]>, frag_table: FragmentationTable, mz_error_tol: f64, peak_sel_strategy: PeakSelectionStrategy) -> Vec<MatchedPeak> {
 
     // --- Compute R*Tree indexing of experimental data --- //
     let all_custom_points: Vec<CustomExpPeak> = spectrum_peaks.iter().map(|peak| {
@@ -232,3 +233,4 @@ else 0
 /*pub fn compute_frag_table() {
 
 }*/
+
