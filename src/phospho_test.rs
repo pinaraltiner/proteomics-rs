@@ -31,24 +31,6 @@ pub struct PsmRecord {
 }
 // --- this function read the tsv file that contains pep_seq, modification (filtered only "phospho") and spectrum title". In here, we also create a struct --- //
 // --- called PSMSpectrum. Using specific library called tsv, we can directly read from the tsv and put into the struct.
-/*fn run(file_path: &str) -> Result<Vec<PsmRecord>> {
-
-    let mut rdr = csv::ReaderBuilder::new()
-        .has_headers(true)
-        .delimiter(b'\t')
-        .double_quote(false)
-        .escape(Some(b'\\'))
-        .flexible(true)
-        .from_path(file_path)?;
-    let mut psms = Vec::with_capacity(100);
-    for record_res  in rdr.deserialize() {
-        let psm:PsmRecord = record_res?;
-        psms.push(psm);
-    }
-    Ok(psms)
-}
-
-*/
 
 fn _read_psms_from_tsv_files(tsv_file_paths: &[&str]) -> Result<Vec<PsmRecord>> {
     let mut all_psms: Vec<PsmRecord> = Vec::with_capacity(1000);
@@ -84,11 +66,9 @@ fn _read_psms_from_tsv(file_path: &str) -> Result<Vec<PsmRecord>> {
             psms.push(psm);
         }
 
-        //println!("{:?}", psm.phospho_pos);
     }
     Ok(psms)
 }
-
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Spectrum {
@@ -98,13 +78,6 @@ pub struct Spectrum {
     //retention_time: f32, // TODO: add this
     peaks: Vec<[f64;2]>, // could aslo be Vec<(f64,f64)>
 }
-
-/*
-#[derive(Clone, PartialEq, Debug)]
-pub struct PsmWithSpectrum {
-    psm_record: PsmRecord,
-    spectrum: Spectrum
-}*/
 
 // --- this function read the mgf file and we create each feature as a new object (title, charge, pep_mass,etc) and we create a struct to put all objects into it. --- //
 // --- Therefore Spectrum struct has MS output (raw files means all spectrum in one run.) --- //
@@ -131,7 +104,6 @@ fn _load_spectra(file_path: &str) -> Result<Vec<Spectrum>> {
         let scan_desc_ref = &scan_description;
 
         let title = (*scan_desc_ref).id.to_string();
-        //println!("title={}", title);
 
         let prec_charge_opt = scan_desc_ref.get_param_by_name("charge").map(|charge_param| {
             let charge_str= charge_param.to_owned().value.chars().take_while(|char| char.is_ascii_digit()).collect::<String>();
@@ -140,7 +112,6 @@ fn _load_spectra(file_path: &str) -> Result<Vec<Spectrum>> {
         });
 
         let prec_mz_opt = (*scan_desc_ref).precursor.as_ref().map(|prec| {prec.ion.mz});
-        //println!("prec_mz_opt is {}", prec_mz_opt.unwrap_or(0.0));
 
         let peaks = scan.peaks.unwrap().peaks;
 
@@ -235,7 +206,6 @@ pub fn test_phospho_analysis() -> Result<()> {
         file.read_to_end(&mut encoded_spectra)?;
 
         let decoded_spectra: Vec<Spectrum> = bincode::deserialize(&encoded_spectra[..]).unwrap();
-        //println!("N decoded spectra={}", decoded_spectra.len());
 
         let mut spectrum_by_title = HashMap::new();
         for spectrum in decoded_spectra {
@@ -247,47 +217,9 @@ pub fn test_phospho_analysis() -> Result<()> {
 
     let psms = _read_psms_from_tsv_files(&input_tsv_files)?;
 
-    // list of interesting peptides
-    /*let peptide_seqs = [
-        "HTDDEMTGYVATR",
-        "FKNESNSLHTYSESPAAPR",
-    ];
-
-    let psms: Vec<PsmRecord> = all_psms.iter().filter(|psm| {
-        peptide_seqs.contains(&&*psm.sequence)
-    }).map(|psm| {
-        println!("psm={:?}",psm);
-        psm.clone()
-    }).collect();*/
-
-    //println!("N phospho PSMs={}", psms.len());
-    //println!("N phospho PSMs={:?}", psms);
 
     // group PSMs by sequence, calculated_mass and charge (because each phospho possibility pep_id would be changed.
     // with the combination of all three features, each possibility could be specified uniquely.
-
-    /*let mut group_keys_mapping = HashMap::new();
-    let mut group_id = 0;
-    let psms_seq_iter = &psms.into_iter().group_by(|psm| {
-        let group_by_key = vec!(psm.sequence.clone(),psm.calculated_mass.to_string(),psm.charge.to_string(),psm.spectrum_title.clone()).join("|");
-        if group_keys_mapping.contains_key(&*group_by_key.clone()) == false {
-            group_keys_mapping.insert(group_by_key.clone(), group_id);
-            group_id += 1;
-        }
-
-        let id_ref = group_keys_mapping.get(&*group_by_key).unwrap();
-
-        *id_ref
-    });*/
-
-    /*let psms_grouped_by_key = &psms.into_iter()
-        .sorted_by_key(|psm| (psm.sequence.clone(),psm.calculated_mass.to_string(),psm.charge,psm.spectrum_title.clone()))
-        .group_by(|psm| (psm.sequence.clone(),psm.calculated_mass.to_string(),psm.charge,psm.spectrum_title.clone()));*/
-
-    /*psms.iter().map(|psm| {
-        let key = (psm.sequence.clone(),psm.calculated_mass.to_string(),psm.charge,psm.spectrum_title.clone());
-        (key, psm)
-    }).into_group_map();*/
 
     let psms_grouped_by_key = psms.iter().into_group_map_by(|psm| {
         //(psm.sequence.clone(),psm.calculated_mass.to_string(),psm.charge,psm.spectrum_title.clone())
@@ -334,14 +266,6 @@ pub fn test_phospho_analysis() -> Result<()> {
                 }
             }
         }
-        //let mut n_phosphates = 1; // from pep_seq (count number of 'Phospho' entries)
-        //let mut phospho_positions = []; // from mods (positions of STY amino acids)
-
-        /*let n_phosphates = pep_seq.chars().fold(0,|sum, c| {
-            if phospho_residues.contains(&c) { sum + 1 }
-            else { sum }
-        });
-        println!("n_phosphates={:?}",n_phosphates);*/
 
         //splitting all modification using ";" and collect all modification that contains "phospho"
         let phospho_mods: Vec<&str> = mods.split("; ").filter(|s| s.starts_with("Phospho")).collect();
@@ -356,28 +280,6 @@ pub fn test_phospho_analysis() -> Result<()> {
             }
         }
 
-        /*let mut phospho_positions = Vec::with_capacity(n_phosphates);
-        let mut phospho_pos_buffer = Vec::new();
-
-        for phospho_mod in phospho_mods {
-            let mut is_inside_parens = false;
-            let chars = phospho_mod.chars();
-            for c in chars {
-                if c == '(' {
-                    is_inside_parens = true;
-                } else if c == ')' {
-                    let phospho_pos: String = phospho_pos_buffer.iter().collect();
-                    phospho_positions.push(phospho_pos.parse::<usize>().unwrap());
-                    phospho_pos_buffer.clear();
-                    is_inside_parens = false;
-                } else if is_inside_parens {
-                    if c.is_ascii_digit() {
-                        phospho_pos_buffer.push(c);
-                    }
-                }
-            }
-        }*/
-
         if n_phosphates == 1 { // FIXME: update _compute_phospho_evidence_matrix to work with many Phosphos
 
             let phospho_matched_peaks = _match_phospho_peaks(
@@ -389,10 +291,6 @@ pub fn test_phospho_analysis() -> Result<()> {
 
             let phospho_evidence_matrix = _compute_phospho_evidence_matrix(&phospho_matched_peaks, &phospho_positions, pep_ion_spectra.len());
 
-            /*for mut spa in phospho_evidence_matrix {
-                spa.spectrum_title = Some(pep_ion_spectra_titles[spa.spectrum_index].clone());
-            }*/
-
             // Verify that pep_ion_spectra and pep_ion_spectra_titles contain the same number of entries
             assert!(pep_ion_spectra.len() == pep_ion_spectra_titles.len());
 
@@ -400,9 +298,6 @@ pub fn test_phospho_analysis() -> Result<()> {
             let matrix_name_ref = &matrix_name;
             let mut matrix_as_text_opt = _print_phospho_evidence_matrix(matrix_name_ref, &phospho_evidence_matrix, &phospho_positions, &pep_ion_spectra_titles);
 
-            /*if matrix_as_text_opt.is_some() {
-                let matrix_as_text = matrix_as_text_opt.unwrap()
-            }*/
             for matrix_as_text in matrix_as_text_opt {
                 let mut outfile = File::create(format!("./data/2022-01-24/{}.tsv",matrix_name_ref))?; //.expect("unable to create file");
 
@@ -417,8 +312,6 @@ pub fn test_phospho_analysis() -> Result<()> {
     Ok(())
 }
 
-
-
 fn _compute_phospho_evidence_matrix(phospho_matched_peaks: &Vec<PhosphoMatchedPeak>, phospho_positions: &Vec<usize>, n_spectra: usize) -> Vec<SpectrumPhosphoAnalysis> {
 
     let mut phospho_evidence_matrix = Vec::with_capacity(phospho_positions.len() * n_spectra);
@@ -432,11 +325,8 @@ fn _compute_phospho_evidence_matrix(phospho_matched_peaks: &Vec<PhosphoMatchedPe
         let spectrum_pmps_groups = spectrum_pmps.into_iter()
             .sorted_by_key(|pmp| pmp.phospho_position)
             .group_by(|pmp| pmp.phospho_position);
-        //let spectrum_pmps_groups_vec: Vec<Vec<PhosphoMatchedPeak>> = spectrum_pmps_groups.into_iter().map(|(a,b)| b.collect()).collect();
-        //println!("spectrum_pmps_groups_vec len={}",spectrum_pmps_groups_vec.len());
 
         for (phospho_pos, spectrum_pmp_group) in &spectrum_pmps_groups {
-            //let ref_spectrum_pmp_group = &spectrum_pmp_group;
 
             let phospho_matched_peaks: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.into_iter().map(|pmp| pmp).collect();
             let phospho_evidence_count = phospho_matched_peaks.iter().filter(|pmp| pmp.is_phospho_evidence).count() as u32;
@@ -449,8 +339,6 @@ fn _compute_phospho_evidence_matrix(phospho_matched_peaks: &Vec<PhosphoMatchedPe
             let non_phospho_evidence_intensity = phospho_matched_peaks.iter()
                 .filter(|pmp| !pmp.is_phospho_evidence)
                 .fold(0.0, |sum, pmp| sum + pmp.matched_peak.peak_intensity);
-
-            //let own_spectrum_pmp = own_spectrum_pmp_iter.copied().collect();
 
             let spa = SpectrumPhosphoAnalysis {
                 phospho_matched_peaks: phospho_matched_peaks,
@@ -474,7 +362,6 @@ pub struct PhosphoEvidenceMatrixAsText {
     pub header: String,
     pub lines: Vec<String>
 }
-
 fn _print_phospho_evidence_matrix(
     name: &String,
     phospho_evidence_matrix: &Vec<SpectrumPhosphoAnalysis>,
@@ -517,8 +404,6 @@ fn _print_phospho_evidence_matrix(
             }
         }
 
-        //titles.push(final_phospho_evidence_table);
-
         let line = values_as_strings.join("\t");
         println!("{}",line);
 
@@ -527,31 +412,12 @@ fn _print_phospho_evidence_matrix(
 
     let phospho_evidence_table = PhosphoEvidenceMatrixAsText {
         name: name.to_owned(),
-        //main_header: main_header.clone(),
         header: header.join("\t"),
         lines: lines
     };
 
     Some(phospho_evidence_table)
 }
-
-//psms in each PsmRecord: group_by same peptide sequence
-/*let spectra_pmps_iter = &phospho_matched_peaks.into_iter().group_by(|pmp| pmp.spectrum_index);
-for (si, spectrum_pmps) in spectra_pmps_iter {
-    let spectrum_pmps_groups = &spectrum_pmps.into_iter().group_by(|pmp| pmp.phospho_position);
-    //let spectrum_pmps_groups_vec: Vec<Vec<PhosphoMatchedPeak>> = spectrum_pmps_groups.into_iter().map(|(a,b)| b.collect()).collect();
-    //println!("spectrum_pmps_groups_vec len={}",spectrum_pmps_groups_vec.len());
-
-    for (phospho_pos, spectrum_pmp_group) in spectrum_pmps_groups {
-        //let ref_spectrum_pmp_group = &spectrum_pmp_group;
-
-        let phospho_matched_peaks: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.into_iter().collect();
-    }
-    let psms_iter_seqs = &psms.into_iter().group_by(|psm| psm.sequence);
-    for (psms_iter_seq) in psms_iter_seqs {
-        //let phospho_matched_peaks: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.into_iter().collect();
-    }
-}*/
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SpectrumPhosphoAnalysis {
@@ -563,7 +429,6 @@ pub struct SpectrumPhosphoAnalysis {
     pub phospho_evidence_intensity: f64,
     pub non_phospho_evidence_intensity: f64,
 }
-
 
 pub fn test_phospho_analysis_on_example_data() -> Result<()> {
 
@@ -578,8 +443,6 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
     let spec_61782_peaks = [[110.071,109400.0],[115.086,30520.0],[116.071,33450.0],[120.081,44250.0],[126.055,47510.0],[129.066,22390.0],[129.102,148300.0],[130.086,38660.0],[136.076,68660.0],[138.055,107000.0],[138.067,15170.0],[141.102,19710.0],[144.064,22740.0],[147.113,32430.0],[155.082,28520.0],[159.076,97380.0],[160.225,16510.0],[166.061,33230.0],[168.065,29600.0],[171.076,24250.0],[171.111,20120.0],[173.092,56440.0],[175.119,565000.0],[183.149,240000.0],[184.152,19650.0],[185.056,32810.0],[187.071,75640.0],[189.087,51690.0],[197.129,41850.0],[199.071,107300.0],[199.108,26780.0],[199.179,25330.0],[201.087,70590.0],[201.124,28610.0],[203.066,24670.0],[204.087,56410.0],[207.124,53230.0],[211.143,331900.0],[212.149,33210.0],[215.139,785500.0],[216.142,82370.0],[217.081,157400.0],[223.154,46330.0],[226.12,26220.0],[227.065,30930.0],[227.104,34840.0],[229.118,57100.0],[231.06,131100.0],[235.118,580900.0],[236.122,79560.0],[243.133,649100.0],[244.137,80690.0],[245.076,42240.0],[251.16,160400.0],[251.659,31870.0],[274.092,22600.0],[286.104,62370.0],[286.184,21880.0],[286.679,233200.0],[287.181,51610.0],[288.119,45370.0],[296.089,43180.0],[298.141,20360.0],[302.097,22640.0],[303.214,59930.0],[312.154,28650.0],[314.097,269800.0],[315.101,33770.0],[316.114,72320.0],[320.211,22250.0],[324.226,89170.0],[327.161,24160.0],[327.202,96780.0],[332.108,162200.0],[333.112,31240.0],[342.091,43920.0],[344.144,64600.0],[344.193,148800.0],[344.694,24270.0],[346.15,22980.0],[348.202,194100.0],[349.206,40480.0],[358.16,207400.0],[359.163,24080.0],[360.105,38710.0],[401.705,202500.0],[402.209,32110.0],[403.15,32710.0],[404.261,68830.0],[413.128,32390.0],[425.131,74170.0],[427.182,186500.0],[428.189,19850.0],[429.125,61820.0],[430.127,25030.0],[430.664,41850.0],[431.143,60810.0],[433.184,64170.0],[439.253,141200.0],[440.257,23910.0],[441.202,27970.0],[443.14,66390.0],[444.66,38510.0],[445.189,18700.0],[447.135,119400.0],[448.14,28440.0],[451.188,21210.0],[457.222,103700.0],[457.724,57180.0],[458.224,20610.0],[459.237,26750.0],[466.227,151700.0],[466.731,56370.0],[477.24,24490.0],[483.736,32960.0],[484.287,55580.0],[492.744,23580.0],[500.739,66320.0],[501.219,64790.0],[501.313,953000.0],[501.745,407000.0],[502.236,108400.0],[502.324,171500.0],[502.75,49250.0],[518.172,64350.0],[518.275,22400.0],[520.211,50190.0],[528.232,62210.0],[532.192,28180.0],[538.214,57210.0],[542.204,26910.0],[543.288,36950.0],[546.168,29140.0],[546.265,69820.0],[548.205,166800.0],[549.214,27560.0],[549.73,67670.0],[550.25,59360.0],[550.771,27490.0],[552.345,20410.0],[554.277,148800.0],[555.288,33860.0],[556.222,241600.0],[557.28,79470.0],[557.785,55060.0],[558.338,43670.0],[559.257,205700.0],[559.761,95150.0],[560.228,67610.0],[572.35,1388000.0],[573.354,299800.0],[574.36,37010.0],[592.271,52750.0],[592.773,25250.0],[600.777,37930.0],[601.275,24980.0],[606.266,114700.0],[606.774,44870.0],[607.276,30810.0],[608.296,28030.0],[609.78,206200.0],[610.281,111000.0],[610.784,36440.0],[613.824,39760.0],[614.324,34310.0],[624.288,22060.0],[626.202,24640.0],[627.353,36410.0],[629.199,25930.0],[631.248,21800.0],[633.297,126600.0],[634.299,29150.0],[644.26,24640.0],[647.216,54120.0],[648.829,30140.0],[649.283,35240.0],[649.794,26560.0],[653.282,38120.0],[654.202,26410.0],[655.328,34720.0],[658.305,72340.0],[658.804,21010.0],[659.244,24550.0],[661.293,323800.0],[662.299,76440.0],[663.307,40010.0],[667.294,158700.0],[667.795,91840.0],[668.303,28630.0],[669.366,35030.0],[670.359,45790.0],[671.346,74270.0],[671.841,19900.0],[677.254,51510.0],[687.376,746600.0],[688.38,208300.0],[689.389,28440.0],[706.827,31570.0],[707.018,64450.0],[707.347,95130.0],[713.823,27240.0],[715.814,64940.0],[720.332,41540.0],[720.822,39920.0],[722.333,23140.0],[722.835,28040.0],[724.812,178700.0],[725.306,98030.0],[725.814,39490.0],[728.848,83960.0],[729.351,64420.0],[729.853,23050.0],[744.338,34730.0],[752.347,53970.0],[757.218,25800.0],[758.353,33610.0],[759.269,28770.0],[760.302,30840.0],[762.352,112600.0],[763.344,51290.0],[767.371,35820.0],[770.356,185200.0],[771.356,80220.0],[772.332,131000.0],[773.033,39640.0],[773.354,81370.0],[773.703,33150.0],[777.839,58900.0],[778.334,34500.0],[779.371,69270.0],[779.877,59920.0],[780.84,27070.0],[781.352,163700.0],[781.857,75240.0],[782.36,59740.0],[784.395,58200.0],[785.389,35650.0],[786.452,32320.0],[787.394,59130.0],[790.335,478000.0],[791.338,165900.0],[792.364,44550.0],[802.404,1054000.0],[803.409,373200.0],[804.417,88740.0],[805.383,43120.0],[805.71,57480.0],[807.358,22560.0],[811.383,133800.0],[811.704,144900.0],[812.034,108400.0],[812.387,47640.0],[815.861,29850.0],[818.332,28780.0],[819.373,28920.0],[827.889,41160.0],[828.373,35930.0],[828.873,44730.0],[836.888,116300.0],[837.391,110000.0],[837.891,74170.0],[838.388,56800.0],[839.396,26250.0],[841.394,36000.0],[842.386,24660.0],[848.398,85230.0],[848.719,39810.0],[849.059,65530.0],[849.903,29790.0],[854.397,112300.0],[854.724,64330.0],[855.062,54840.0],[855.382,42950.0],[857.391,27190.0],[858.4,35490.0],[860.325,40220.0],[863.395,39220.0],[864.402,32960.0],[868.398,36260.0],[870.301,75910.0],[871.437,99050.0],[872.425,51200.0],[872.907,29420.0],[873.396,39400.0],[875.427,358500.0],[876.433,129200.0],[876.874,62950.0],[877.42,205200.0],[877.909,106300.0],[878.412,57400.0],[880.083,41360.0],[880.407,67950.0],[883.446,27280.0],[885.412,70430.0],[885.875,79000.0],[886.076,77880.0],[886.419,1123000.0],[886.916,640500.0],[887.07,52690.0],[887.417,305600.0],[887.922,84950.0],[888.302,257100.0],[889.308,89290.0],[892.088,542300.0],[892.419,563000.0],[892.751,391000.0],[893.081,176700.0],[901.471,73950.0],[903.42,743800.0],[904.424,288700.0],[905.427,66640.0],[913.433,157700.0],[914.432,74680.0],[915.428,32930.0],[921.42,34840.0],[924.449,80230.0],[931.446,1009000.0],[932.45,369800.0],[933.459,108100.0],[933.956,40730.0],[934.44,34960.0],[934.953,29660.0],[942.966,126800.0],[943.461,145300.0],[943.967,78920.0],[944.481,33480.0],[966.472,36150.0],[969.415,47440.0],[970.424,49650.0],[973.406,189600.0],[974.409,74980.0],[982.465,55560.0],[983.413,33040.0],[984.493,124400.0],[985.498,85520.0],[1000.473,77110.0],[1001.393,384400.0],[1002.485,961000.0],[1003.487,353300.0],[1004.499,85350.0],[1011.482,39720.0],[1011.987,41090.0],[1012.493,51840.0],[1043.445,29570.0],[1051.009,33110.0],[1051.511,44130.0],[1051.993,36290.0],[1052.457,33500.0],[1060.024,319200.0],[1060.515,297400.0],[1061.012,100400.0],[1061.502,49430.0],[1080.439,49650.0],[1081.48,38790.0],[1082.482,52930.0],[1083.004,28340.0],[1083.518,41340.0],[1085.518,65980.0],[1095.539,38630.0],[1096.544,36890.0],[1098.476,35250.0],[1099.529,181600.0],[1100.499,111500.0],[1113.554,362800.0],[1114.55,166700.0],[1115.544,92690.0],[1116.541,32010.0],[1117.511,833200.0],[1118.514,369600.0],[1119.524,95270.0],[1150.536,45730.0],[1183.531,36010.0],[1193.521,33080.0],[1197.535,42690.0],[1200.508,103400.0],[1201.513,39080.0],[1207.562,44870.0],[1208.052,69150.0],[1208.572,43690.0],[1210.573,31040.0],[1211.53,236400.0],[1212.542,122700.0],[1213.543,34180.0],[1214.557,99060.0],[1215.571,70620.0],[1216.562,217000.0],[1217.067,213800.0],[1217.562,104800.0],[1218.054,44690.0],[1218.558,296500.0],[1219.555,156600.0],[1220.559,50040.0],[1226.648,187600.0],[1227.629,105300.0],[1228.59,63090.0],[1229.583,35030.0],[1272.081,74690.0],[1272.558,106000.0],[1273.079,43860.0],[1273.583,30290.0],[1281.104,92660.0],[1281.582,136300.0],[1282.07,46900.0],[1282.596,36130.0],[1297.603,39520.0],[1312.547,35050.0],[1315.593,85550.0],[1316.594,57410.0],[1317.613,45480.0],[1324.615,127000.0],[1325.606,62490.0],[1326.615,45070.0],[1333.586,262700.0],[1334.584,122300.0],[1335.589,49890.0],[1341.661,96710.0],[1342.672,75120.0],[1343.645,43800.0],[1412.622,32910.0],[1413.609,38790.0],[1430.624,167700.0],[1431.624,126900.0],[1432.633,61490.0],[1439.633,44870.0],[1448.611,515900.0],[1449.613,274600.0],[1450.609,99130.0],[1456.697,105300.0],[1457.695,77320.0],[1559.688,34280.0],[1561.705,143200.0],[1562.689,93790.0],[1672.769,79910.0],[1673.757,66500.0],[1674.78,64740.0],[1753.813,78570.0],[1754.829,61680.0],[1771.83,448500.0],[1772.811,288400.0],[1773.779,119400.0],[1774.824,41300.0]];
 
     let pep_seq = "IEDSEPHIPLIDDTDAEDDAPTKR";
-
-
     spectra.push(spec_60736_peaks.to_vec());
     spectra.push(spec_60840_peaks.to_vec());
     spectra.push(spec_61751_peaks.to_vec());
@@ -635,7 +498,6 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
         //println!("spectrum_pmps_groups_vec len={}",spectrum_pmps_groups_vec.len());
 
         for (phospho_pos, spectrum_pmp_group) in spectrum_pmps_groups {
-            //let ref_spectrum_pmp_group = &spectrum_pmp_group;
 
             let phospho_matched_peaks2: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.iter().map(|pmp_ref| **pmp_ref).collect();
             let phospho_evidence_count = phospho_matched_peaks2.iter().filter(|pmp| pmp.is_phospho_evidence).count() as u32;
@@ -648,8 +510,6 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
             let non_phospho_evidence_intensity = phospho_matched_peaks2.iter()
                 .filter(|pmp| !pmp.is_phospho_evidence)
                 .fold(0.0, |sum, pmp| sum + pmp.matched_peak.peak_intensity);
-
-            //let own_spectrum_pmp = own_spectrum_pmp_iter.copied().collect();
 
             let spa = SpectrumPhosphoAnalysis {
                 phospho_matched_peaks: phospho_matched_peaks2,
@@ -693,8 +553,6 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
         println!("{}",values_as_strings.join("\t"));
     }
 
-
-
     //println!("phospho count={}",phospho_matched_peaks.iter().filter(|p| p.is_phospho_evidence).count());
     //println!("non phospho count={}",phospho_matched_peaks.iter().filter(|p| p.is_phospho_evidence == false).count());
 
@@ -714,11 +572,9 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
     use FragmentIonSeries::*;
 
     //put aa_pos as a variable in the compute_phospho_frag_table, and decide what else do you need as a variable to compute correctly your code
-
     let spectra_ref = &spectra;
 
     let expected_max_results_count = spectra.len() * 2 * phospho_positions.len() * pep_seq.len() * 2;
-    //println!("expected_max_results_count={}",expected_max_results_count);
     let mut result = Vec::with_capacity(expected_max_results_count);
 
     // --- for loop depending on the phospho positions --- //
@@ -768,8 +624,6 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
             }
         }
     }
-
-
    //println!("phospho_aa_frag_table={:?}", phospho_frag_table[0]);
 
     // TODO: check if we can replace multiple annotate_spectrum calls by a single one taking as input a Vector of many spectra
