@@ -1,4 +1,4 @@
-use mzdata::MGFReader;
+//use mzdata::MGFReader;
 
 pub fn read_mgf_file() {
     // See: https://github.com/mobiusklein/mzdata/blob/4050dd35d53ac461f5c71f3f7839f88ef40eb506/src/io/mgf.rs#L728

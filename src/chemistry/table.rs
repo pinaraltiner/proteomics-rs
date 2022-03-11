@@ -343,20 +343,6 @@ lazy_static! {
                 codons: svec!["CCA", "CCC", "CCG", "CCU"]
             },
             AminoAcidResidue {
-                code1: 'U',
-                code3: "Sec".to_string(),
-                name: "Selenocysteine".to_string(),
-                formula: Some("C(3) H(5) N O Se".to_string()),
-                mono_mass: 150.9536353,
-                average_mass: 150.0379,
-                occurrence: 0.0,
-                pka1: 0.0,
-                pka2: 0.0,
-                pka3: 5.73,
-                pi: 5.47,
-                codons: svec!["UGA"]
-            },
-            AminoAcidResidue {
                 code1: 'S',
                 code3: "Ser".to_string(),
                 name: "Serine".to_string(),
@@ -472,6 +458,20 @@ lazy_static! {
                 pka3: 0.0,
                 pi: 0.0,
                 codons: svec!["UAG"]
+            },
+            AminoAcidResidue {
+                code1: 'U',
+                code3: "Sec".to_string(),
+                name: "Selenocysteine".to_string(),
+                formula: Some("C(3) H(5) N O Se".to_string()),
+                mono_mass: 150.9536353,
+                average_mass: 150.0379,
+                occurrence: 0.0,
+                pka1: 0.0,
+                pka2: 0.0,
+                pka3: 5.73,
+                pi: 5.47,
+                codons: svec!["UGA"]
             },
             AminoAcidResidue {
                 code1: 'X',

@@ -4,7 +4,7 @@ use crate::chemistry::constants::PROTON_MASS;
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Eq, PartialEq, Debug)]
-enum MassTolUnit {
+pub enum MassTolUnit {
     Da,
     mmu,
     ppm
@@ -27,7 +27,7 @@ impl std::fmt::Display for MassTolUnit {
     }
 }
 
-fn calc_mz_tol_in_daltons(mz: f64, mz_tol: f64, tol_unit: MassTolUnit) -> f64 {
+pub fn calc_mz_tol_in_daltons(mz: f64, mz_tol: f64, tol_unit: MassTolUnit) -> f64 {
     match tol_unit {
         MassTolUnit::Da => mz_tol,
         MassTolUnit::mmu => mz_tol / 1000.0,
@@ -35,11 +35,11 @@ fn calc_mz_tol_in_daltons(mz: f64, mz_tol: f64, tol_unit: MassTolUnit) -> f64 {
     }
 }
 
-pub fn mz_to_mass( mz: f64, charge: i32 ) -> f64 {
+pub fn mz_to_mass(mz: f64, charge: i32) -> f64 {
     let z = charge as f64;
     mz * z.abs() - z * PROTON_MASS
 }
-pub fn mass_to_mz( mass: f64, charge: i32 ) -> f64 {
+pub fn mass_to_mz(mass: f64, charge: i32) -> f64 {
     let z = charge as f64;
     (mass + z * PROTON_MASS) / z.abs()
 }

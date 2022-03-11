@@ -33,7 +33,7 @@ pub enum PeakSelectionStrategy {
     HIGHEST_PEAK,
 }
 
-pub fn annotate_spectrum(spectrum_peaks: &Vec<[f64;2]>, frag_table: FragmentationTable, mz_error_tol: f64, peak_sel_strategy: PeakSelectionStrategy) -> Vec<MatchedPeak> {
+pub fn annotate_spectrum(spectrum_peaks: &Vec<[f64;2]>, frag_table: &FragmentationTable, mz_error_tol: f64, peak_sel_strategy: PeakSelectionStrategy) -> Vec<MatchedPeak> {
 
     // --- Compute R*Tree indexing of experimental data --- //
     let all_custom_points: Vec<CustomExpPeak> = spectrum_peaks.iter().map(|peak| {

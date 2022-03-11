@@ -82,11 +82,12 @@ impl SimpleFragmentationConfig {
 }
 
 // --- Compute m/z value of fragment ion series (it contains all ion_types into one vector)  --- //
-pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries, charge: i8) -> Result<Vec<f64>> {
+pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries, charge: i8, aa_table: &AminoAcidTable) -> Result<Vec<f64>> {
 
     let seq_len = pep_seq.len();
     let mut frag_series_mz_values = Vec::with_capacity(seq_len);
-    let t = &*STANDARD_AMINO_ACID_TABLE;
+    //let t = &*STANDARD_AMINO_ACID_TABLE;
+
 
     // --- This function contains ion series directions itself --- //
     use FragmentIonSeriesDirection::*;
@@ -95,7 +96,7 @@ pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries,
             // Forward ions loop
             for i in 1..seq_len { // starts at one because pep_seq slicing range will be between 0 and i-1
                 let pep_subset_seq = &pep_seq[0..i];
-                frag_series_mz_values.push(_calc_ion_mz(pep_subset_seq, t, ion_type, charge));
+                frag_series_mz_values.push(_calc_ion_mz(pep_subset_seq, aa_table, ion_type, charge));
                 //println!("{} {:.4}", fion_aa, bmz);
             }
 
@@ -106,7 +107,7 @@ pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries,
             for i in (1..seq_len).rev() {
                 // create slice (subset reference) of peptide sequence
                 let pep_subset_seq = &pep_seq[i .. seq_len];
-                frag_series_mz_values.push(_calc_ion_mz(pep_subset_seq, t, ion_type, charge));
+                frag_series_mz_values.push(_calc_ion_mz(pep_subset_seq, aa_table, ion_type, charge));
             }
 
             Ok(frag_series_mz_values)
@@ -118,9 +119,9 @@ pub fn compute_frag_series_mz_values(pep_seq: &str, ion_type: FragmentIonSeries,
 
 }
 // --- Calculate mz value of a given peptide sequence depending on ion type and charge state --- //
-fn _calc_ion_mz(pep_subset_seq: &str, t: &AminoAcidTable, ion_type: FragmentIonSeries, charge: i8) -> f64 {
+fn _calc_ion_mz(pep_subset_seq: &str, aa_table: &AminoAcidTable, ion_type: FragmentIonSeries, charge: i8) -> f64 {
     // calculate mass of peptide sequence subset
-    let pep_subset_mass = calc_aa_seq_mass(pep_subset_seq, t, true).unwrap();
+    let pep_subset_mass = calc_aa_seq_mass(pep_subset_seq, aa_table, true).unwrap();
     // calculate mass of fragment ion
     let ion_mass = pep_subset_mass + get_ion_mono_mass_shift(ion_type);
     // convert mass to m/z value
@@ -139,7 +140,7 @@ pub struct TheoreticalFragmentIons {
 
 pub type FragmentationTable = Vec<TheoreticalFragmentIons>;
 // --- by this function, we also add ion type, and charge state information additionally to this vector to distinguish between them. --- //
-pub fn compute_fragmentation_table(pep_seq: &str, ion_types: &[FragmentIonSeries], frag_ion_charges: &Vec<i8>) -> Result<FragmentationTable> {
+pub fn compute_fragmentation_table(pep_seq: &str, ion_types: &[FragmentIonSeries], frag_ion_charges: &Vec<i8>, aa_table: &AminoAcidTable) -> Result<FragmentationTable> {
 
     let mut frag_table: FragmentationTable = Vec::with_capacity(ion_types.len());
 //for each charge state, ion_types should be recalculated so that "for loop of charge" into the "for loop of ion_type" --- //
@@ -148,7 +149,7 @@ pub fn compute_fragmentation_table(pep_seq: &str, ion_types: &[FragmentIonSeries
 
         for charge in frag_ion_charges {
 
-            let mz_values_res = compute_frag_series_mz_values(pep_seq, *ion_type, *charge);
+            let mz_values_res = compute_frag_series_mz_values(pep_seq, *ion_type, *charge, aa_table);
             let mz_values = mz_values_res?;
 
             // add to fragmentation table a new column containing different mz values for considered ion type and charge state
