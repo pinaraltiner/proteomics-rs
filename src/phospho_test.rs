@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::io::prelude::*;
 use std::fs::File;
+use std::path::Path;
 
 use anyhow::*;
 use itertools::Itertools;
@@ -135,10 +136,16 @@ fn _load_spectra(file_path: &str) -> Result<Vec<Spectrum>> {
 
 pub fn test_phospho_analysis() -> Result<()> {
 
+    let output_path = Path::new("./data/2022-03-17_test_twophospho/");
+    if output_path.is_dir() == false {
+        std::fs::create_dir_all(output_path)?;
+    }
+
     let mz_error_tol = 0.02;
     let phospho_residues = ['S','T','Y'];
-
+    //only use for testing
     //let mgf_dataset_path = "./data/rim_dataset_NS_vs_45/mgf_dataset_20220215.bin";
+    //actual data
     let mgf_dataset_path = "./data/rim_dataset_NS_vs_45/mgf_dataset_20220216.bin";
 
     let input_mgf_files = [
@@ -282,9 +289,12 @@ pub fn test_phospho_analysis() -> Result<()> {
 
         if n_phosphates == 1 { // FIXME: update _compute_phospho_evidence_matrix to work with many Phosphos
 
+            let phospho_positions_combinations = phospho_positions.to_vec().into_iter().combinations(n_phosphates).collect_vec();
+
             let phospho_matched_peaks = _match_phospho_peaks(
                 pep_seq.as_str(),
-                &phospho_positions,
+                &phospho_positions_combinations,
+                n_phosphates,
                 &pep_ion_spectra,
                 mz_error_tol
             )?;
@@ -296,10 +306,50 @@ pub fn test_phospho_analysis() -> Result<()> {
 
             let matrix_name = format!("PEPTIDE={} MODS={} CHARGE={} MASS={}",pep_seq, mods, charge, pep_mass);
             let matrix_name_ref = &matrix_name;
-            let mut matrix_as_text_opt = _print_phospho_evidence_matrix(matrix_name_ref, &phospho_evidence_matrix, &phospho_positions, &pep_ion_spectra_titles);
+            let mut matrix_as_text_opt = _print_phospho_evidence_matrix(
+                matrix_name_ref,
+                &phospho_evidence_matrix,
+                &phospho_positions_combinations,
+                &pep_ion_spectra_titles
+            );
 
             for matrix_as_text in matrix_as_text_opt {
-                let mut outfile = File::create(format!("./data/2022-01-24/{}.tsv",matrix_name_ref))?; //.expect("unable to create file");
+                let mut outfile = File::create(format!("{}/{}.tsv",output_path.to_string_lossy(),matrix_name_ref))?; //.expect("unable to create file");
+
+                writeln!(&mut outfile, "{}", matrix_as_text.header)?; //.expect("unable to write");
+                for line in matrix_as_text.lines.iter() {
+                    writeln!(&mut outfile, "{}", line)?; //.expect("unable to write");
+                }
+            }
+        }
+        //FIXME
+        if n_phosphates > 1 {
+            let phospho_positions_combinations = phospho_positions.to_vec().into_iter().combinations(n_phosphates).collect_vec();
+
+            let phospho_matched_peaks = _match_phospho_peaks(
+                pep_seq.as_str(),
+                &phospho_positions_combinations,
+                n_phosphates,
+                &pep_ion_spectra,
+                mz_error_tol
+            )?;
+
+            let phospho_evidence_matrix = _compute_phospho_evidence_matrix(&phospho_matched_peaks, &phospho_positions, pep_ion_spectra.len());
+
+            // Verify that pep_ion_spectra and pep_ion_spectra_titles contain the same number of entries
+            assert!(pep_ion_spectra.len() == pep_ion_spectra_titles.len());
+
+            let matrix_name = format!("PEPTIDE={} MODS={} CHARGE={} MASS={}",pep_seq, mods, charge, pep_mass);
+            let matrix_name_ref = &matrix_name;
+            let mut matrix_as_text_opt = _print_phospho_evidence_matrix(
+                matrix_name_ref,
+                &phospho_evidence_matrix,
+                &phospho_positions_combinations,
+                &pep_ion_spectra_titles
+            );
+
+            for matrix_as_text in matrix_as_text_opt {
+                let mut outfile = File::create(format!("{}/{}.tsv",output_path.to_string_lossy(),matrix_name_ref))?; //.expect("unable to create file");
 
                 writeln!(&mut outfile, "{}", matrix_as_text.header)?; //.expect("unable to write");
                 for line in matrix_as_text.lines.iter() {
@@ -314,19 +364,28 @@ pub fn test_phospho_analysis() -> Result<()> {
 
 fn _compute_phospho_evidence_matrix(phospho_matched_peaks: &Vec<PhosphoMatchedPeak>, phospho_positions: &Vec<usize>, n_spectra: usize) -> Vec<SpectrumPhosphoAnalysis> {
 
+    //create Vector of Spectrum Phospho Analysis struct to collect all results
     let mut phospho_evidence_matrix = Vec::with_capacity(phospho_positions.len() * n_spectra);
+    //first sort by ascending order and group all spectrum indices
     let spectra_pmps_iter = phospho_matched_peaks.into_iter()
         .sorted_by_key(|pmp| pmp.spectrum_index)
         .group_by(|pmp| pmp.spectrum_index);
 
     for (si, spectrum_pmps_groups) in &spectra_pmps_iter {
-        let spectrum_pmps: Vec<PhosphoMatchedPeak> = spectrum_pmps_groups.into_iter().map(|pmp_ref| *pmp_ref).collect();
+        // iterate both spectrum and its index and change values to dereference each spectrum
+        let spectrum_pmps: Vec<PhosphoMatchedPeak> = spectrum_pmps_groups.into_iter().map(|pmp_ref| (pmp_ref.clone())).collect();
+        //let spectrum_pmps: Vec<PhosphoMatchedPeak> = spectrum_pmps_groups.into_iter().map(|pmp_ref| *pmp_ref.clone()).collect();
 
+        // first sort by ascending order and group all spectrum_pmp groups depending on phospho_position
+        /*let spectrum_pmps_groups = spectrum_pmps.into_iter()
+            .sorted_by_key(|pmp| pmp.phospho_positions)
+            .group_by(|pmp| pmp.phospho_positions);*/
         let spectrum_pmps_groups = spectrum_pmps.into_iter()
-            .sorted_by_key(|pmp| pmp.phospho_position)
-            .group_by(|pmp| pmp.phospho_position);
+            .sorted_by_key(|pmp| pmp.phospho_positions.to_owned())
+            .group_by(|pmp| pmp.phospho_positions.to_owned());
 
-        for (phospho_pos, spectrum_pmp_group) in &spectrum_pmps_groups {
+
+        for (phospho_positions, spectrum_pmp_group) in &spectrum_pmps_groups {
 
             let phospho_matched_peaks: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.into_iter().map(|pmp| pmp).collect();
             let phospho_evidence_count = phospho_matched_peaks.iter().filter(|pmp| pmp.is_phospho_evidence).count() as u32;
@@ -343,7 +402,7 @@ fn _compute_phospho_evidence_matrix(phospho_matched_peaks: &Vec<PhosphoMatchedPe
             let spa = SpectrumPhosphoAnalysis {
                 phospho_matched_peaks: phospho_matched_peaks,
                 spectrum_index: si,
-                phospho_position: phospho_pos,
+                phospho_positions: phospho_positions,
                 phospho_evidence_count: phospho_evidence_count,
                 non_phospho_evidence_count: non_phospho_evidence_count,
                 phospho_evidence_intensity: phospho_evidence_intensity,
@@ -365,7 +424,7 @@ pub struct PhosphoEvidenceMatrixAsText {
 fn _print_phospho_evidence_matrix(
     name: &String,
     phospho_evidence_matrix: &Vec<SpectrumPhosphoAnalysis>,
-    phospho_positions: &Vec<usize>,
+    phospho_positions_combinations: &Vec<Vec<usize>>,
     spectra_titles: &Vec<String>
 ) -> Option<PhosphoEvidenceMatrixAsText> {
     let n_spectra = spectra_titles.len();
@@ -373,11 +432,13 @@ fn _print_phospho_evidence_matrix(
 
     println!("\n{}",name);
 
-    let mut header = Vec::with_capacity(2 * phospho_positions.len());
+    let mut header = Vec::with_capacity(2 * phospho_positions_combinations.len());
     header.push("SPECTRUM".to_string());
-    for pos in phospho_positions {
-        header.push(format!("P{}", pos));
-        header.push(format!("NP{}", pos));
+    for phospho_positions_combination in phospho_positions_combinations {
+        //header.push(format!("P{}", phospho_positions_combination.join("&")));
+        //header.push(format!("NP{}", phospho_positions_combination.join("&")));
+        header.push(format!("P{:?}", phospho_positions_combination));
+        header.push(format!("NP{:?}", phospho_positions_combination));
     }
 
     println!("{}",header.join("\t"));
@@ -390,9 +451,11 @@ fn _print_phospho_evidence_matrix(
 
         let mut values_as_strings: Vec<String> = Vec::new();
         values_as_strings.push(spectrum_title);
-
-        for phospho_position in phospho_positions {
-            let spectrum_analyses_for_pos: Vec<&&SpectrumPhosphoAnalysis> = spectrum_analyses_ref.into_iter().filter(|spa| spa.phospho_position == *phospho_position).collect();
+        //for phospho_positions_combination in &phospho_positions_combinations {
+        for phospho_positions_combination in phospho_positions_combinations {
+            let spectrum_analyses_for_pos: Vec<&&SpectrumPhosphoAnalysis> = spectrum_analyses_ref
+                .into_iter().filter(|spa| spa.phospho_positions == phospho_positions_combination.clone()).collect();
+            //.into_iter().filter(|spa| spa.phospho_positions == phospho_positions_combination).collect();
             if spectrum_analyses_for_pos.len() == 0 {
                 values_as_strings.push("0".to_string());
                 values_as_strings.push("0".to_string());
@@ -423,7 +486,7 @@ fn _print_phospho_evidence_matrix(
 pub struct SpectrumPhosphoAnalysis {
     pub phospho_matched_peaks: Vec<PhosphoMatchedPeak>,
     pub spectrum_index: usize,
-    pub phospho_position: usize,
+    pub phospho_positions: Vec<usize>,
     pub phospho_evidence_count: u32,
     pub non_phospho_evidence_count: u32,
     pub phospho_evidence_intensity: f64,
@@ -459,9 +522,11 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
     let n_spectra = spectra.len();
     //output of phospho_matched_peaks= [PhosphoMatchedPeak {matched_peak: MatchedPeak {peak_mz,peak_intensity,theo_mz,mz_error,ion_type,charge,aa_index},spectrum_index, phospho_position, is_phospho_evidence}
 
+    let phospho_positions_combinations = phospho_positions.to_vec().into_iter().combinations(1).collect_vec();
     let phospho_matched_peaks = _match_phospho_peaks(
         pep_seq,
-        &phospho_positions,
+        &phospho_positions_combinations,
+        1,
         &spectra,
         mz_error_tol
     )?;
@@ -493,13 +558,16 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
     let mut final_result = Vec::with_capacity(phospho_positions.len() * n_spectra);
     let spectra_pmps_iter = phospho_matched_peaks.iter().into_group_map_by(|pmp| pmp.spectrum_index);
     for (si, spectrum_pmps) in spectra_pmps_iter {
-        let spectrum_pmps_groups = spectrum_pmps.iter().map(|pmp_ref| *pmp_ref).into_group_map_by(|pmp| pmp.phospho_position);
+        let spectrum_pmps_groups = spectrum_pmps.iter()
+            .map(|pmp_ref| *pmp_ref).into_group_map_by(|pmp| pmp.phospho_positions.clone());
+        //        let spectrum_pmps_groups = spectrum_pmps.iter()
+        //             .map(|pmp_ref| *pmp_ref).into_group_map_by(|pmp| pmp.phospho_positions);
         //let spectrum_pmps_groups_vec: Vec<Vec<PhosphoMatchedPeak>> = spectrum_pmps_groups.into_iter().map(|(a,b)| b.collect()).collect();
         //println!("spectrum_pmps_groups_vec len={}",spectrum_pmps_groups_vec.len());
 
-        for (phospho_pos, spectrum_pmp_group) in spectrum_pmps_groups {
-
-            let phospho_matched_peaks2: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.iter().map(|pmp_ref| **pmp_ref).collect();
+        for (phospho_positions, spectrum_pmp_group) in spectrum_pmps_groups {
+            //let phospho_matched_peaks2: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.iter().map(|&pmp_ref| pmp_ref).collect();
+            let phospho_matched_peaks2: Vec<PhosphoMatchedPeak> = spectrum_pmp_group.iter().map(|&pmp_ref| pmp_ref.clone()).collect();
             let phospho_evidence_count = phospho_matched_peaks2.iter().filter(|pmp| pmp.is_phospho_evidence).count() as u32;
             let non_phospho_evidence_count = phospho_matched_peaks2.iter().filter(|pmp| !pmp.is_phospho_evidence).count() as u32;
 
@@ -514,7 +582,7 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
             let spa = SpectrumPhosphoAnalysis {
                 phospho_matched_peaks: phospho_matched_peaks2,
                 spectrum_index: si,
-                phospho_position: phospho_pos,
+                phospho_positions: phospho_positions,
                 phospho_evidence_count: phospho_evidence_count,
                 non_phospho_evidence_count: non_phospho_evidence_count,
                 phospho_evidence_intensity: phospho_evidence_intensity,
@@ -538,7 +606,7 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
 
         let mut values_as_strings: Vec<String> = Vec::new();
         for phospho_position in phospho_positions {
-            let spectrum_analyses_for_pos: Vec<&&SpectrumPhosphoAnalysis> = spectrum_analyses_ref.into_iter().filter(|spa| spa.phospho_position == phospho_position).collect();
+            let spectrum_analyses_for_pos: Vec<&&SpectrumPhosphoAnalysis> = spectrum_analyses_ref.into_iter().filter(|spa| spa.phospho_positions == phospho_positions).collect();
             if spectrum_analyses_for_pos.len() == 0 {
                 values_as_strings.push("0".to_string());
                 values_as_strings.push("0".to_string());
@@ -559,26 +627,26 @@ pub fn test_phospho_analysis_on_example_data() -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct PhosphoMatchedPeak {
     matched_peak: MatchedPeak,
     spectrum_index: usize,
-    phospho_position: usize,
+    phospho_positions: Vec<usize>,
     is_phospho_evidence: bool,
 }
 
-fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Vec<Vec<[f64;2]>>, mz_error_tol: f64) -> Result<Vec<PhosphoMatchedPeak>> {
+fn _match_phospho_peaks(pep_seq: &str, phospho_positions_combinations: &Vec<Vec<usize>>, n_phosphates: usize, spectra: &Vec<Vec<[f64;2]>>, mz_error_tol: f64) -> Result<Vec<PhosphoMatchedPeak>> {
 
     use FragmentIonSeries::*;
 
     //put aa_pos as a variable in the compute_phospho_frag_table, and decide what else do you need as a variable to compute correctly your code
     let spectra_ref = &spectra;
 
-    let expected_max_results_count = spectra.len() * 2 * phospho_positions.len() * pep_seq.len() * 2;
+    let expected_max_results_count = spectra.len() * 2 * phospho_positions_combinations.len() * pep_seq.len() * 2;
     let mut result = Vec::with_capacity(expected_max_results_count);
 
-    // --- for loop depending on the phospho positions --- //
-    for position in phospho_positions {
+    // --- for each combination of phospho positions --- //
+    for phospho_positions_combination in phospho_positions_combinations {
 
         // --- 1. create phospho table --- //
         let phospho_frag_table = compute_phospho_frag_table(
@@ -586,7 +654,7 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
             //&[a,a_H2O,a_NH3,b,b_H2O,b_NH3,y,y_H2O,y_NH3],
             &[b, y],
             &vec![1],
-            *position,
+            &phospho_positions_combination,
             true
         )?;
 
@@ -596,7 +664,7 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
             //&[a,a_H2O,a_NH3,b,b_H2O,b_NH3,y,y_H2O,y_NH3],
             &[b, y],
             &vec![1],
-            *position,
+            &phospho_positions_combination,
             false
         )?;
 
@@ -609,7 +677,7 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
                 result.push(PhosphoMatchedPeak {
                     matched_peak: matched_peak,
                     spectrum_index: spectrum_idx,
-                    phospho_position: *position,
+                    phospho_positions: phospho_positions_combination.clone(),
                     is_phospho_evidence: true,
                 });
             }
@@ -618,12 +686,14 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
                 result.push(PhosphoMatchedPeak {
                     matched_peak: matched_peak,
                     spectrum_index: spectrum_idx,
-                    phospho_position: *position,
+                    phospho_positions: phospho_positions_combination.clone(),
                     is_phospho_evidence: false,
                 });
             }
         }
     }
+
+
    //println!("phospho_aa_frag_table={:?}", phospho_frag_table[0]);
 
     // TODO: check if we can replace multiple annotate_spectrum calls by a single one taking as input a Vector of many spectra
@@ -631,38 +701,48 @@ fn _match_phospho_peaks(pep_seq: &str, phospho_positions: &[usize], spectra: &Ve
     Ok(result)
 }
 
-pub fn compute_phospho_frag_table(pep_seq: &str, ion_types: &[FragmentIonSeries], frag_ion_charges: &Vec<i8>, phospho_aa_pos: usize, apply_mass_inc: bool) -> Result<Vec<TheoreticalFragmentIons>> {
+pub fn compute_phospho_frag_table(pep_seq: &str, ion_types: &[FragmentIonSeries], frag_ion_charges: &Vec<i8>, phospho_aa_positions: &Vec<usize>, apply_mass_inc: bool) -> Result<Vec<TheoreticalFragmentIons>> {
 
-    let phospho_mass_inc = 79.966; // FIXME: precise value
-    let phospho_aa_forward_index = phospho_aa_pos - 1;
+    let phospho_mass_inc = 79.966331; // H O(3) P => copy-pasted from https://www.unimod.org/modifications_view.php?editid1=21
     let pep_seq_len = pep_seq.len();
-    let phospho_aa_reverse_index = pep_seq_len - phospho_aa_pos;
+    let phospho_aa_forward_indices = phospho_aa_positions.iter().map(|&phospho_aa_pos| phospho_aa_pos - 1).collect_vec();
+    let phospho_aa_reverse_indices = phospho_aa_positions.iter().map(|&phospho_aa_pos| pep_seq_len - phospho_aa_pos).collect_vec();
+    let phospho_aa_forward_indices_ref = &phospho_aa_forward_indices;
+    let phospho_aa_reverse_indices_ref = &phospho_aa_reverse_indices;
 
     use FragmentIonSeries::*;
-    //the output type of compute_fragmentation_table is in Result<> because of that it did not use for determination of vector capacity (line 62)
+    //the output type of compute_fragmentation_table is in Result<> because of that it did not use for determination of vector capacity
     let default_frag_table= compute_fragmentation_table(pep_seq, ion_types, frag_ion_charges)?;
     //println!("frag_table_prec_3: {:?}",frag_table_prec_3)
 
     let mut updated_phospho_aa_frag_table = Vec::with_capacity(default_frag_table.len());
+    // -- generation of multiple fragmentation table for each position's combination -- //
+    //create charge info by iterating fragment ions and create vectors to all frag_mz_values
     for frag_series in default_frag_table.to_owned() {
+        let frag_series_charge = frag_series.charge;
         let mut updated_frag_mz_values = Vec::with_capacity(frag_series.mz_values.len());
         let mut cloned_frag_series = frag_series.clone();
-
+        //iterate using both index and mz values of each fragment ions and determine phospho bound aminoacid position as index
+        //after determination of phospho bound aa indeces, it searches and countes every frag_idx that has equal or lower than phospho index
+        //for more info look at your notebook
         for (frag_idx, frag_mz) in frag_series.mz_values.into_iter().enumerate() {
-            let phospho_aa_index = if is_ion_forward(frag_series.ion_type).unwrap() { phospho_aa_forward_index } else { phospho_aa_reverse_index };
-
-            if frag_idx < phospho_aa_index {
+            let phospho_aa_indices = if is_ion_forward(frag_series.ion_type).unwrap() { phospho_aa_forward_indices_ref } else { phospho_aa_reverse_indices_ref };
+            let n_phosphates_at_cur_idx = phospho_aa_indices.iter()
+                .filter(|&&phospho_aa_idx| phospho_aa_idx <= frag_idx).count();
+                //.fold(0, |n_phosphates, &phospho_aa_idx| if phospho_aa_idx <= frag_idx { n_phosphates + 1 } else { n_phosphates });
+            // depending on having phosphate, it would be added the current m/z value up mass increment as a ratio of n_phosphate
+            if n_phosphates_at_cur_idx == 0 {
                 updated_frag_mz_values.push(0.0);
             } else {
-                let updated_frag_mz: f64 = if apply_mass_inc {frag_mz + phospho_mass_inc} else {frag_mz};
+                let updated_frag_mz: f64 = if apply_mass_inc {frag_mz + (n_phosphates_at_cur_idx as f64 * phospho_mass_inc) / frag_series_charge as f64} else {frag_mz};
                 updated_frag_mz_values.push(updated_frag_mz);
             }
         }
 
         cloned_frag_series.mz_values = updated_frag_mz_values;
         updated_phospho_aa_frag_table.push(cloned_frag_series);
-
     }
 
     Ok(updated_phospho_aa_frag_table)
 }
+
