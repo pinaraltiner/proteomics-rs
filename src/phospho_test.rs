@@ -171,12 +171,13 @@ fn _load_spectra(file_path: &str) -> Result<Vec<Spectrum>> {
     // From matching btw MS/MS output and their PSMs, calculating theo frag mz (with/out including phospho mass shift)
     // and comparing them to exp frag mz then, extracting intensity info of matched peaks. Finally writing into separate tsv file
 
-pub fn test_phospho_analysis(int_count: bool,phospho_num: usize) -> Result<()> {
+pub fn test_phospho_analysis(mgf_dataset_path:&str ,final_path: &str,input_tsv_files: [&str;1], int_count: bool,phospho_num: usize) -> Result<()> {
 
 
     let aa_table = &*PROTEINOGENIC_AMINO_ACID_TABLE;
 
-    let output_path = Path::new("./data/benchmarks/example");
+    //let output_path = Path::new("./data/benchmarks/example");
+    let output_path = Path::new(&final_path);
     //phospho_evidence_matrices_list/results_correct_pos_from_eyers_pools/eliminate_duplicate_ions/two_int_count/
     if output_path.is_dir() == false {
         std::fs::create_dir_all(output_path)?;
@@ -227,7 +228,7 @@ pub fn test_phospho_analysis(int_count: bool,phospho_num: usize) -> Result<()> {
     // --- Eyer's input files --- //
     // Eyer's Actual data
 
-    let mgf_dataset_path = "./data/benchmarks/MGF/mgf_dataset_20220407.bin";
+    //let mgf_dataset_path = "./data/benchmarks/MGF/mgf_dataset_20220407.bin";
 
     let input_mgf_files = [
         "./data/benchmarks/MGF/SF_200217_pPeptideLibrary_pool1_HCDOT_rep1.mgf",
@@ -242,7 +243,7 @@ pub fn test_phospho_analysis(int_count: bool,phospho_num: usize) -> Result<()> {
         "./data/benchmarks/MGF/SF_200217_pPeptideLibrary_pool5_HCDOT_rep2.mgf"
     ];
 
-    let input_tsv_files = ["./data/benchmarks/phospho_evidence_matrices_list/results_correct_pos_from_eyers_pools/1comb_correct_pos_proline_no_isomer_pep_list_extracted_from_pool1-5.tsv"];
+    //let input_tsv_files = ["./data/benchmarks/phospho_evidence_matrices_list/results_correct_pos_from_eyers_pools/1comb_correct_pos_proline_no_isomer_pep_list_extracted_from_pool1-5.tsv"];
 
 
     // ---Code used to cache the spectra --- //
